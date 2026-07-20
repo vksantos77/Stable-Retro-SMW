@@ -1,34 +1,39 @@
 import stable_retro as retro
 import imageio
-import time
+import numpy as np
 
 env = retro.make(game='SuperMarioWorld-Snes-v0', render_mode=None)
 obs, info = env.reset()
 
-writer = imageio.get_writer('mario_random_5min.mp4', fps=60)
+# Descobre o índice do botão RIGHT dinamicamente (evita depender da ordem fixa)
+buttons = env.buttons
+print("Botões disponíveis:", buttons)
 
-start_time = time.time()
-duration_seconds = 5 * 60  # 5 minutos
+right_index = buttons.index('RIGHT')
+
+# Monta a ação: todos os botões soltos, exceto RIGHT pressionado
+action = np.zeros(env.action_space.n, dtype=np.int8)
+action[right_index] = 1
+
+writer = imageio.get_writer('mario_right.mp4', fps=60)
+
+num_steps = 1800  # 30 segundos de conteúdo a 60fps
 total_reward = 0
-step_count = 0
 
-while time.time() - start_time < duration_seconds:
-    action = env.action_space.sample()
+for step in range(num_steps):
     obs, reward, terminated, truncated, info = env.step(action)
     total_reward += reward
     writer.append_data(obs)
-    step_count += 1
 
     if terminated or truncated:
+        print(f"Episódio terminou no step {step}. Resetando...")
         obs, info = env.reset()
 
-    if step_count % 600 == 0:  # a cada ~10s de jogo
-        elapsed = time.time() - start_time
-        print(f"[{elapsed:.0f}s] Steps: {step_count} | Recompensa acumulada: {total_reward:.1f}")
+    if step % 300 == 0:
+        print(f"Step {step} | Recompensa acumulada: {total_reward:.1f}")
 
 writer.close()
 env.close()
 
-print(f"\nFinalizado! Total de steps: {step_count}")
-print(f"Recompensa acumulada final: {total_reward:.1f}")
-print("Vídeo salvo como mario_random_5min.mp4")
+print(f"\nFinalizado! Recompensa acumulada: {total_reward:.1f}")
+print("Vídeo salvo como mario_right.mp4")
