@@ -58,7 +58,7 @@ class PreprocessFrameWrapper(gym.ObservationWrapper):
     def observation(self, obs):
         gray = cv2.cvtColor(obs,cv2.COLOR_RGB2GRAY)
         resized = cv2.resize(gray, (self.width, self.height), interpolation=cv2.INTER_AREA)
-        return resized[:,:,none]
+        return resized[:,:,None]
 
 def make_env(game="SuperMarioWorld-Snes-v0", state=None, render_mode=None):
     """
