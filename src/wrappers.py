@@ -60,21 +60,90 @@ class PreprocessFrameWrapper(gym.ObservationWrapper):
         resized = cv2.resize(gray, (self.width, self.height), interpolation=cv2.INTER_AREA)
         return resized[:,:,None]
 
+class XPositionRewardWrapper(gym.Wrapper):
+    def __init__(self, env, death_penalty=-15.0, step_penalty=-0.1):
+        super().__init__(env)
+        self.death_penalty = death_penalty
+        self.step_penalty = step_penalty
+        self._prev_x = None
+        self._prev_lives = None
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        self._prev_x = info.get("x_pos", 0)
+        self._prev_lives = info.get("lives", 0)
+        return obs, info
+
+    def step(self, action):
+        obs, _original_reward, terminated, truncated, info = self.env.step(action)
+
+        x_pos = info.get("x_pos", self._prev_x)
+        lives = info.get("lives", self._prev_lives)
+
+        died = lives < self._prev_lives
+
+        if died:
+            reward = self.death_penalty
+            terminated = True  # força o fim do episódio na primeira morte
+        else:
+            reward = (x_pos - self._prev_x) + self.step_penalty
+
+        self._prev_x = x_pos
+        self._prev_lives = lives
+
+        return obs, float(reward), terminated, truncated, info
+    
+    def __init__(self, env, death_penalty=-15.0, step_penalty=-0.1):
+        super().__init__(env)
+        self.death_penalty = death_penalty
+        self.step_penalty = step_penalty
+        self._prev_x = None
+        self._prev_lives = None
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        self._prev_x = info.get("x_pos", 0)
+        self._prev_lives = info.get("lives", 0)
+        return obs, info
+
+    def step(self, action):
+        obs, _original_reward, terminated, truncated, info = self.env.step(action)
+
+        x_pos = info.get("x_pos", self._prev_x)
+        lives = info.get("lives", self._prev_lives)
+
+        died = lives < self._prev_lives
+
+        if died:
+            reward = self.death_penalty
+        else:
+            reward = (x_pos - self._prev_x) + self.step_penalty
+
+        self._prev_x = x_pos
+        self._prev_lives = lives
+
+        return obs, float(reward), terminated, truncated, info
+    
 def make_env(game="SuperMarioWorld-Snes-v0", state=None, render_mode=None):
-    """
-    Cria o ambiente já com os wrappers de ação e pré-processamento de imagem aplicados. Frame stacking é adicionado separadamente, fora desta função, usando VecFrameStack (ver train.py) para funcionar corretamente com ambientes vetorizados do stable-baselines3.
-    """
     import stable_retro as retro
 
-    kwargs = {"game": game, "render_mode": render_mode}
+    retro.data.Integrations.add_custom_path(
+        "/home/ghostpunk/projetos/Stable-Retro/custom_integrations"
+    )
+
+    kwargs = {
+        "game": game,
+        "render_mode": render_mode,
+        "inttype": retro.data.Integrations.ALL,
+    }
     if state is not None:
         kwargs["state"] = state
 
     env = retro.make(**kwargs)
     env = DiscreteActionWrapper(env)
+    env = XPositionRewardWrapper(env)
     env = PreprocessFrameWrapper(env)
     return env
-
 if __name__ == "__main__":
     env = make_env()
     obs,info = env.reset()

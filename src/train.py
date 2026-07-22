@@ -1,21 +1,45 @@
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
+from stable_baselines3.common.callbacks import CheckpointCallback
 from wrappers import make_env
+import os
 
-# 1. Cria o ambiente vetorizado (mesmo rodando só 1 instância)
+MODELS_DIR = "../models"
+CHECKPOINTS_DIR = "../models/checkpoints"
+
+
+def get_next_model_name(base_name="mario_ppo"):
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    existing = [f for f in os.listdir(MODELS_DIR) if f.startswith(base_name) and f.endswith(".zip")]
+
+    version_numbers = []
+    for filename in existing:
+        name_without_ext = filename.replace(".zip", "")
+        version_str = name_without_ext.replace(f"{base_name}_v", "")
+        if version_str.isdigit():
+            version_numbers.append(int(version_str))
+
+    next_version = max(version_numbers, default=0) + 1
+    return f"{base_name}_v{next_version}"
+
+
+model_name = get_next_model_name()
+
 env = DummyVecEnv([lambda: make_env()])
-
-# 2. Empilha os últimos 4 frames, pra o agente perceber movimento
 env = VecFrameStack(env, n_stack=4)
 
-# 3. Cria o modelo PPO com política CNN (adequada pra observação em imagem)
-model = PPO("CnnPolicy", env, verbose=1)
+model = PPO("CnnPolicy", env, verbose=1, ent_coef=0.01)
 
-# 4. Treina por um número de timesteps (prova de conceito: começamos pequeno)
-model.learn(total_timesteps=100_000)
+checkpoint_callback = CheckpointCallback(
+    save_freq=20_000,
+    save_path=CHECKPOINTS_DIR,
+    name_prefix=model_name,
+)
 
-# 5. Salva o modelo treinado, pra poder carregar e testar depois
-model.save("../models/mario_ppo_v2")
+model.learn(total_timesteps=200_000, callback=checkpoint_callback)
+
+model.save(f"{MODELS_DIR}/{model_name}")
 
 env.close()
-print("Treino finalizado e modelo salvo em models/mario_ppo_v2")
+print(f"Treino finalizado e modelo salvo em models/{model_name}.zip")
+print(f"Checkpoints salvos em {CHECKPOINTS_DIR}/")
